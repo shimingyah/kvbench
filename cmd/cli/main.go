@@ -22,6 +22,7 @@ var (
 	size     = flag.Int("size", 128, "data size")
 	fsync    = flag.Bool("fsync", true, "fsync")
 	s        = flag.String("s", "pebble", "store type")
+	batch    = flag.Int("b", 10, "batch size")
 	data     = make([]byte, *size)
 )
 
@@ -78,7 +79,7 @@ func testBatchWrite(name string, store kvbench.Store) {
 	for i := 0; i < *c; i++ {
 		wg.Add(1)
 		go func(proc int) {
-			batchSize := uint64(1000)
+			batchSize := uint64(*batch)
 			var keyList, valList [][]byte
 			for i := uint64(0); i < batchSize; i++ {
 				keyList = append(keyList, atomicKey())
@@ -283,8 +284,8 @@ func testKeys(name string, store kvbench.Store) {
 				case <-ctx.Done():
 					break LOOP
 				default:
-					newID := atomic.AddUint64(&startID, 1000)
-					store.Keys(genKey(newID), 1000, true)
+					newID := atomic.AddUint64(&startID, uint64(*batch))
+					store.Keys(genKey(newID), *batch, true)
 
 					if atomic.LoadUint64(&startID) > maxID {
 						atomic.StoreUint64(&startID, 0)

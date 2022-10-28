@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,10 +18,10 @@ import (
 
 var (
 	duration = flag.Duration("d", time.Minute, "test duration for each case")
-	c        = flag.Int("c", runtime.NumCPU(), "concurrent goroutines")
-	size     = flag.Int("size", 256, "data size")
-	fsync    = flag.Bool("fsync", false, "fsync")
-	s        = flag.String("s", "map", "store type")
+	c        = flag.Int("c", 16, "concurrent goroutines")
+	size     = flag.Int("size", 128, "data size")
+	fsync    = flag.Bool("fsync", true, "fsync")
+	s        = flag.String("s", "pebble", "store type")
 	data     = make([]byte, *size)
 )
 
@@ -104,7 +103,9 @@ func testBatchWrite(name string, store kvbench.Store) {
 		}(i)
 	}
 	wg.Wait()
-	fmt.Printf("%s batch write test inserted: %d entries; took: %s s\n", name, total, time.Since(start))
+	dur := time.Since(start)
+	d := int64(dur)
+	fmt.Printf("kvbench %s batch write test inserted: %d entries, %d: op/s took: %s s\n", name, total, int64(total)*1e6/(d/1e3), time.Since(start))
 }
 
 // test get
@@ -147,7 +148,7 @@ func testGet(name string, store kvbench.Store) {
 	for _, count := range counts {
 		n += count
 	}
-	fmt.Printf("%s get rate: %d op/s, mean: %d ns, took: %d s\n", name, int64(n)*1e6/(d/1e3), d/int64((n)*(*c)), int(dur.Seconds()))
+	fmt.Printf("kvbench %s get rate: %d op/s, mean: %d ns, took: %d s\n", name, int64(n)*1e6/(d/1e3), d/int64((n)*(*c)), int(dur.Seconds()))
 }
 
 // test multiple get/one set
@@ -211,11 +212,11 @@ func testGetSet(name string, store kvbench.Store) {
 	}
 
 	if setCount == 0 {
-		fmt.Printf("%s setmixed rate: -1 op/s, mean: -1 ns, took: %d s\n", name, int(dur.Seconds()))
+		fmt.Printf("kvbench %s setmixed rate: -1 op/s, mean: -1 ns, took: %d s\n", name, int(dur.Seconds()))
 	} else {
-		fmt.Printf("%s setmixed rate: %d op/s, mean: %d ns, took: %d s\n", name, int64(setCount)*1e6/(d/1e3), d/int64(setCount), int(dur.Seconds()))
+		fmt.Printf("kvbench %s setmixed rate: %d op/s, mean: %d ns, took: %d s\n", name, int64(setCount)*1e6/(d/1e3), d/int64(setCount), int(dur.Seconds()))
 	}
-	fmt.Printf("%s getmixed rate: %d op/s, mean: %d ns, took: %d s\n", name, int64(n)*1e6/(d/1e3), d/int64((n)*(*c)), int(dur.Seconds()))
+	fmt.Printf("kvbench %s getmixed rate: %d op/s, mean: %d ns, took: %d s\n", name, int64(n)*1e6/(d/1e3), d/int64((n)*(*c)), int(dur.Seconds()))
 }
 
 func testSet(name string, store kvbench.Store) {
@@ -254,7 +255,7 @@ func testSet(name string, store kvbench.Store) {
 	for _, count := range counts {
 		n += count
 	}
-	fmt.Printf("%s set rate: %d op/s, mean: %d ns, took: %d s\n", name, int64(n)*1e6/(d/1e3), d/int64((n)*(*c)), int(dur.Seconds()))
+	fmt.Printf("kvbench %s set rate: %d op/s, mean: %d ns, took: %d s\n", name, int64(n)*1e6/(d/1e3), d/int64((n)*(*c)), int(dur.Seconds()))
 }
 
 func testDelete(name string, store kvbench.Store) {
@@ -294,7 +295,7 @@ func testDelete(name string, store kvbench.Store) {
 		n += count
 	}
 
-	fmt.Printf("%s del rate: %d op/s, mean: %d ns, took: %d s\n", name, int64(n)*1e6/(d/1e3), d/int64((n)*(*c)), int(dur.Seconds()))
+	fmt.Printf("kvbench %s del rate: %d op/s, mean: %d ns, took: %d s\n", name, int64(n)*1e6/(d/1e3), d/int64((n)*(*c)), int(dur.Seconds()))
 }
 
 func genKey(i uint64) []byte {
@@ -351,16 +352,16 @@ func getStore(s string, fsync bool, path string) (kvbench.Store, string, error) 
 			path = "buntdb.db"
 		}
 		store, err = kvbench.NewBuntdbStore(path, fsync)
-	case "rocksdb":
-		if path == "" {
-			path = "rocksdb.db"
-		}
-		store, err = kvbench.NewRocksdbStore(path, fsync)
+	// case "rocksdb":
+	// 	if path == "" {
+	// 		path = "rocksdb.db"
+	// 	}
+	// 	store, err = kvbench.NewRocksdbStore(path, fsync)
 	case "pebble":
 		if path == "" {
 			path = "pebble.db"
 		}
-		store, err = kvbench.NewRocksdbStore(path, fsync)
+		store, err = kvbench.NewPebbleStore(path, fsync)
 	case "pogreb":
 		if path == "" {
 			path = "pogreb.db"

@@ -23,6 +23,11 @@ func NewBadgerStore(path string, fsync bool) (Store, error) {
 	if path == ":memory:" {
 		opts.InMemory = true
 	}
+	opts.MaxTableSize = 256 << 20
+	opts.NumLevelZeroTables = 8
+	opts.NumLevelZeroTablesStall = 16
+	opts.NumMemtables = 8
+	opts.ValueThreshold = 32
 
 	opts.SyncWrites = fsync
 	db, err := badger.Open(opts)
@@ -41,14 +46,23 @@ func (s *badgerStore) Close() error {
 }
 
 func (s *badgerStore) PSet(keys, vals [][]byte) error {
-	wb := s.db.NewWriteBatch()
-	for i := range keys {
-		err := wb.Set(keys[i], vals[i])
-		if err != nil {
-			return err
+	return s.db.Update(func(txn *badger.Txn) error {
+		for i := range keys {
+			err := txn.Set(keys[i], vals[i])
+			if err != nil {
+				return err
+			}
 		}
-	}
-	return wb.Flush()
+		return nil
+	})
+	// wb := s.db.NewWriteBatch()
+	// for i := range keys {
+	// 	err := wb.Set(keys[i], vals[i])
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
+	// return wb.Flush()
 }
 
 func (s *badgerStore) PGet(keys [][]byte) ([][]byte, []bool, error) {

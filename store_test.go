@@ -20,7 +20,7 @@ var stores = []struct {
 	{"leveldb", "leveldb.db", NewLevelDBStore},
 	{"kv", "kv.db", NewKVStore},
 	{"buntdb", "buntdb.db", NewBuntdbStore},
-	{"rocksdb", "rocksdb.db", NewRocksdbStore},
+	// {"rocksdb", "rocksdb.db", NewRocksdbStore},
 	{"pebble", "pebble.db", NewPebbleStore},
 	{"pogreb", "pogreb.db", NewPogrebStore},
 	{"btree", "btree.db", NewBTreeStore},

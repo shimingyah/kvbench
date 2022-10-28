@@ -31,6 +31,11 @@ func NewPebbleStore(path string, fsync bool) (Store, error) {
 		opts.DisableWAL = true
 	}
 
+	opts.MemTableSize = 256 << 20
+	opts.MemTableStopWritesThreshold = 8
+	opts.L0CompactionThreshold = 16
+	opts.L0StopWritesThreshold = 24
+
 	wo := &pebble.WriteOptions{}
 	wo.Sync = fsync
 
@@ -79,7 +84,9 @@ func (s *pebbleStore) Set(key, value []byte) error {
 
 func (s *pebbleStore) Get(key []byte) ([]byte, bool, error) {
 	v, closer, err := s.db.Get(key)
-	closer.Close()
+	if closer != nil {
+		closer.Close()
+	}
 	return v, v != nil, err
 }
 

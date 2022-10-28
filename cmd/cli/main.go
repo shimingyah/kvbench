@@ -25,6 +25,8 @@ var (
 	data     = make([]byte, *size)
 )
 
+var id uint64
+
 func main() {
 
 	flag.Parse()
@@ -61,6 +63,7 @@ func main() {
 	testSet(name, store)
 	testGet(name, store)
 	testGetSet(name, store)
+	testKeys(name, store)
 	testDelete(name, store)
 }
 
@@ -78,7 +81,7 @@ func testBatchWrite(name string, store kvbench.Store) {
 			batchSize := uint64(1000)
 			var keyList, valList [][]byte
 			for i := uint64(0); i < batchSize; i++ {
-				keyList = append(keyList, genKey(i))
+				keyList = append(keyList, atomicKey())
 				valList = append(valList, make([]byte, *size))
 			}
 		LOOP:
@@ -167,7 +170,7 @@ func testGetSet(name string, store kvbench.Store) {
 			case <-ch:
 				return
 			default:
-				store.Set(genKey(i), data)
+				store.Set(atomicKey(), data)
 				setCount++
 				i++
 			}
@@ -239,7 +242,7 @@ func testSet(name string, store kvbench.Store) {
 				case <-ctx.Done():
 					break LOOP
 				default:
-					store.Set(genKey(i), data)
+					store.Set(atomicKey(), data)
 					i += uint64(*c)
 					count++
 				}
@@ -256,6 +259,52 @@ func testSet(name string, store kvbench.Store) {
 		n += count
 	}
 	fmt.Printf("kvbench %s set rate: %d op/s, mean: %d ns, took: %d s\n", name, int64(n)*1e6/(d/1e3), d/int64((n)*(*c)), int(dur.Seconds()))
+}
+
+func testKeys(name string, store kvbench.Store) {
+	var wg sync.WaitGroup
+	wg.Add(*c)
+
+	ctx, cancel := context.WithTimeout(context.Background(), *duration)
+	defer cancel()
+
+	counts := make([]int, *c)
+	start := time.Now()
+	maxID := atomic.LoadUint64(&id)
+	startID := uint64(1)
+	for j := 0; j < *c; j++ {
+		index := uint64(j)
+		go func() {
+			count := 0
+			i := index
+		LOOP:
+			for {
+				select {
+				case <-ctx.Done():
+					break LOOP
+				default:
+					newID := atomic.AddUint64(&startID, 1000)
+					store.Keys(genKey(newID), 1000, true)
+
+					if atomic.LoadUint64(&startID) > maxID {
+						atomic.StoreUint64(&startID, 0)
+					}
+					i += uint64(*c)
+					count++
+				}
+			}
+			counts[index] = count
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	dur := time.Since(start)
+	d := int64(dur)
+	var n int
+	for _, count := range counts {
+		n += count
+	}
+	fmt.Printf("kvbench %s scan rate: %d op/s, mean: %d ns, took: %d s\n", name, int64(n)*1e6/(d/1e3), d/int64((n)*(*c)), int(dur.Seconds()))
 }
 
 func testDelete(name string, store kvbench.Store) {
@@ -303,6 +352,11 @@ func genKey(i uint64) []byte {
 	r[0] = 'k'
 	binary.BigEndian.PutUint64(r[1:], i)
 	return r
+}
+
+func atomicKey() []byte {
+	newID := atomic.AddUint64(&id, 1)
+	return genKey(newID)
 }
 
 func getStore(s string, fsync bool, path string) (kvbench.Store, string, error) {

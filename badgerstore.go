@@ -117,15 +117,15 @@ func (s *badgerStore) Del(key []byte) (bool, error) {
 	return err == nil, err
 }
 
-func (s *badgerStore) Keys(pattern []byte, limit int, withvals bool) ([][]byte, [][]byte, error) {
+func (s *badgerStore) Keys(start []byte, limit int, withvals bool) ([][]byte, [][]byte, error) {
 	var keys [][]byte
 	var vals [][]byte
+	var count int
 
 	err := s.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		prefix := pattern
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+		for it.Seek(start); it.Valid(); it.Next() {
 			item := it.Item()
 			k := item.Key()
 			keys = append(keys, k)
@@ -135,6 +135,11 @@ func (s *badgerStore) Keys(pattern []byte, limit int, withvals bool) ([][]byte, 
 					continue
 				}
 				vals = append(vals, v)
+			}
+
+			count++
+			if count > limit {
+				break
 			}
 		}
 		return nil

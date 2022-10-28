@@ -1,7 +1,6 @@
 package kvbench
 
 import (
-	"bytes"
 	"io"
 	"sync"
 
@@ -73,12 +72,15 @@ func (s *pebbleStore) PGet(keys [][]byte) ([][]byte, []bool, error) {
 	for i, k := range keys {
 		vals[i], closer, err = s.db.Get(k)
 		oks[i] = (err == nil)
-		closer.Close()
+		if closer != nil {
+			closer.Close()
+		}
 	}
 	return vals, oks, err
 }
 
 func (s *pebbleStore) Set(key, value []byte) error {
+	return s.PSet([][]byte{key}, [][]byte{value})
 	return s.db.Set(key, value, s.wo)
 }
 
@@ -95,20 +97,21 @@ func (s *pebbleStore) Del(key []byte) (bool, error) {
 	return err == nil, err
 }
 
-func (s *pebbleStore) Keys(pattern []byte, limit int, withvals bool) ([][]byte, [][]byte, error) {
+func (s *pebbleStore) Keys(start []byte, limit int, withvals bool) ([][]byte, [][]byte, error) {
 	var keys [][]byte
 	var vals [][]byte
+	var count int
 
 	io := &pebble.IterOptions{}
 	it := s.db.NewIter(io)
 	defer it.Close()
-	it.SeekGE(pattern)
+	it.SeekGE(start)
 
 	for ; it.Valid(); it.Next() {
-		key := it.Key()
-		if !bytes.HasPrefix(key, pattern) {
-			break
-		}
+		// key := it.Key()
+		// if !bytes.HasPrefix(key, pattern) {
+		// 	break
+		// }
 
 		k := it.Key()
 		keys = append(keys, k)
@@ -116,6 +119,11 @@ func (s *pebbleStore) Keys(pattern []byte, limit int, withvals bool) ([][]byte, 
 		if withvals {
 			value := it.Value()
 			vals = append(vals, value)
+		}
+
+		count++
+		if count > limit {
+			break
 		}
 	}
 
